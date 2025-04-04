@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -149,14 +150,18 @@ type CSROptions struct {
 	SAN            []string
 	MustStaple     bool
 	EmailAddresses []string
+	URIs           []string
 }
 
 func CreateCSR(privateKey crypto.PrivateKey, opts CSROptions) ([]byte, error) {
 	var dnsNames []string
+	var uris []*url.URL
 	var ipAddresses []net.IP
 	for _, altname := range opts.SAN {
 		if ip := net.ParseIP(altname); ip != nil {
 			ipAddresses = append(ipAddresses, ip)
+		} else if parsedUrl, err := url.Parse(altname); err == nil && parsedUrl.Scheme != "" && parsedUrl.Host != "" {
+			uris = append(uris, parsedUrl)
 		} else {
 			dnsNames = append(dnsNames, altname)
 		}
@@ -166,6 +171,7 @@ func CreateCSR(privateKey crypto.PrivateKey, opts CSROptions) ([]byte, error) {
 		Subject:        pkix.Name{CommonName: opts.Domain},
 		DNSNames:       dnsNames,
 		EmailAddresses: opts.EmailAddresses,
+		URIs:           uris,
 		IPAddresses:    ipAddresses,
 	}
 

@@ -69,6 +69,7 @@ type ObtainRequest struct {
 	PrivateKey     crypto.PrivateKey
 	MustStaple     bool
 	EmailAddresses []string
+	URIs           []string
 
 	NotBefore      time.Time
 	NotAfter       time.Time
@@ -328,6 +329,7 @@ func (c *Certifier) getForOrder(domains []string, order acme.ExtendedOrder, requ
 		SAN:            san,
 		MustStaple:     request.MustStaple,
 		EmailAddresses: request.EmailAddresses,
+		URIs:           request.URIs,
 	}
 
 	csr, err := certcrypto.CreateCSR(privateKey, csrOptions)
@@ -477,6 +479,7 @@ type RenewOptions struct {
 	// Not supported for CSR request.
 	MustStaple     bool
 	EmailAddresses []string
+	URIs           []string
 }
 
 // Renew takes a Resource and tries to renew the certificate.
@@ -569,6 +572,7 @@ func (c *Certifier) RenewWithOptions(certRes Resource, options *RenewOptions) (*
 		request.Bundle = options.Bundle
 		request.PreferredChain = options.PreferredChain
 		request.EmailAddresses = options.EmailAddresses
+		request.URIs = options.URIs
 		request.Profile = options.Profile
 		request.AlwaysDeactivateAuthorizations = options.AlwaysDeactivateAuthorizations
 	}
