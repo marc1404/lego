@@ -160,19 +160,30 @@ func CreateCSR(privateKey crypto.PrivateKey, opts CSROptions) ([]byte, error) {
 	for _, altname := range opts.SAN {
 		if ip := net.ParseIP(altname); ip != nil {
 			ipAddresses = append(ipAddresses, ip)
-		} else if parsedUrl, err := url.Parse(altname); err == nil && parsedUrl.Scheme != "" && parsedUrl.Host != "" {
-			uris = append(uris, parsedUrl)
 		} else {
 			dnsNames = append(dnsNames, altname)
 		}
 	}
-
+	for _, uri := range opts.URIs {
+		parsedUri, err := url.Parse(uri)
+		if err != nil {
+			return nil, err
+		}
+		uris = append(uris, parsedUri)
+	}
+	san, _ := encodeSAN(dnsNames, opts.EmailAddresses, uris, ipAddresses)
 	template := x509.CertificateRequest{
 		Subject:        pkix.Name{CommonName: opts.Domain},
 		DNSNames:       dnsNames,
 		EmailAddresses: opts.EmailAddresses,
 		URIs:           uris,
 		IPAddresses:    ipAddresses,
+		ExtraExtensions: []pkix.Extension{
+			{
+				Id:    asn1.ObjectIdentifier{2, 5, 29, 17}, // SAN OID
+				Value: san,
+			},
+		},
 	}
 
 	if opts.MustStaple {
@@ -183,6 +194,32 @@ func CreateCSR(privateKey crypto.PrivateKey, opts CSROptions) ([]byte, error) {
 	}
 
 	return x509.CreateCertificateRequest(rand.Reader, &template, privateKey)
+}
+
+func encodeSAN(dnsNames []string, emails []string, uris []*url.URL, ips []net.IP) ([]byte, error) {
+	var rawValues []asn1.RawValue
+
+	// Encode DNS names
+	for _, dns := range dnsNames {
+		rawValues = append(rawValues, asn1.RawValue{Class: 2, Tag: 2, Bytes: []byte(dns)}) // Tag 2 = dNSName
+	}
+
+	// Encode Email addresses
+	for _, email := range emails {
+		rawValues = append(rawValues, asn1.RawValue{Class: 2, Tag: 1, Bytes: []byte(email)}) // Tag 1 = rfc822Name (email)
+	}
+
+	// Encode URIs
+	for _, uri := range uris {
+		rawValues = append(rawValues, asn1.RawValue{Class: 2, Tag: 6, Bytes: []byte(uri.String())}) // Tag 6 = uniformResourceIdentifier
+	}
+
+	// Encode IP addresses
+	for _, ip := range ips {
+		rawValues = append(rawValues, asn1.RawValue{Class: 2, Tag: 7, Bytes: ip}) // Tag 7 = iPAddress
+	}
+
+	return asn1.Marshal(rawValues)
 }
 
 func PEMEncode(data interface{}) []byte {
